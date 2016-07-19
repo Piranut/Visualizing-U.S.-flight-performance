@@ -1,0 +1,108 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Loading libraries
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+list.files()
+setwd('/Users/Piranut/Desktop/data_science/udacity_lessons/D3/final_proj')
+getwd()
+
+ad <- read.csv('data_sets/airline_delay_causes(june2003-april2014).csv')
+
+# This data set contains information about airline flight delays, air traffic information and performance. This data set contains information on all domestic flights from all major airports from June 2003 to April 2014.
+
+names(ad)
+str(ad)
+summary(ad)
+head(ad)
+summary(ad$X.carrier_delay)
+summary(ad$arr_flights)
+
+
+# Clean data
+# make variable date + clean up date
+ad$date <- as.Date(paste(ad$year,ad$X.month, 1, sep='-'), format='%Y-%m-%d')
+summary(ad$date)
+
+
+# number of air carriers
+nrow(table(ad$carrier))
+table(ad$carrier)
+
+# New summary table
+ef <- ad %>%
+  group_by(date, year, carrier_name) %>%
+  summarise(arrivals = sum(arr_flights),
+            delayed = sum(arr_del15),
+            cancelled = sum(arr_cancelled),
+            diverted = sum(arr_diverted),
+            arrivals_delays = sum(X.arr_delay),
+            carrier_delays = sum(X.carrier_delay)) %>%
+  transform(on_time = 1 - delayed/arrivals,
+            arr_delay = arrivals_delays/arrivals,
+            carrier_delay = carrier_delays/arrivals)
+# Cut out NA values
+ef <- ef[complete.cases(ef),]
+head(ef)
+summary(ef)
+?complete.cases()
+
+
+# EDA Plots
+ggplot(ef,aes(date,on_time)) +
+  geom_line(aes(color = carrier_name))
+
+# Subset data with major airlines
+# aggregate data by carrier name 
+agg <- ef %>%
+      group_by(carrier_name) %>%
+      summarise(monthly_avg = mean(arrivals),
+                arrivals = sum(arrivals))
+agg
+# pull 75th percentile, based on monthly average arrivals
+selected_carriers <- subset(agg, monthly_avg >= quantile(monthly_avg,0.81))$carrier_name
+selected_carriers
+summary(selected_carriers)
+
+
+# Reshaping data
+ff <- subset(ef, is.element(carrier_name, selected_carriers)) %>%
+  group_by(year, carrier_name) %>%
+  summarise(arrivals = sum(arrivals),
+            delayed = sum(delayed),
+            cancelled = sum(cancelled),
+            diverted = sum(diverted),
+            arrivals_delays = sum(arrivals_delays),
+            carrier_delays = sum(carrier_delays)) %>%
+  transform(on_time = 1 - delayed/arrivals,
+            arr_delay = arrivals_delays/arrivals,
+            carrier_delay = carrier_delays/arrivals)
+ff <- ff[complete.cases(ff),]
+names(ff)
+ff
+
+# Replot
+p1 <- ggplot(ff,aes(year,on_time)) +
+  geom_line(aes(color=carrier_name)) +
+  scale_x_continuous(lim=c(2003,2014), breaks = c(2003:2014))
+p2 <- ggplot(ff,aes(year,carrier_delay)) +
+  geom_line(aes(color=carrier_name)) +
+  scale_x_continuous(lim=c(2003,2014), breaks = c(2003:2014)) 
+p3 <- ggplot(ff,aes(year,arr_delay)) +
+  geom_line(aes(color=carrier_name)) +
+  scale_x_continuous(lim=c(2003,2014), breaks = c(2003:2014)) 
+grid.arrange(p1, p2, p3, ncol=1)
+
+
+# Export new csv
+write.csv(ff, file='flight_data4.csv',row.names=FALSE)
+
+
+```
+
